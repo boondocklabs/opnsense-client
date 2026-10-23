@@ -155,6 +155,68 @@ cargo run --example stream -- traffic 5
 The optional sample count stops the example after that many messages; otherwise
 it runs until EOF, an error, or Ctrl-C.
 
+## Insight historical reports
+
+`client.insight()` provides typed access to NetFlow/Insight reporting:
+
+- `metadata()`, `interfaces()`, `protocols()`, and `services()` for discovery.
+- `time_series(&TimeSeriesQuery)` for historical bytes, packets, or rates.
+- `top(&TopQuery)` for interface totals, top sources/ports, and detailed flows.
+- `export_csv(dataset, range, resolution_seconds)` for a CSV download.
+
+```rust,no_run
+use opnsense_client::insight::{Dataset, TimeRange, TimeSeriesQuery, TopQuery};
+use std::time::Duration;
+
+# async fn example(client: &opnsense_client::Client) -> opnsense_client::Result<()> {
+let range = TimeRange::last(Duration::from_secs(3600))?;
+let insight = client.insight();
+let hosts = insight.top(&TopQuery::sources(range).interface("igc0")?.limit(10)?).await?;
+let history = insight.time_series(
+    &TimeSeriesQuery::new(Dataset::InterfaceTotals, range, 30)?
+).await?;
+# Ok(())
+# }
+```
+
+Time ranges use UTC Unix **seconds**; returned `TimePoint.timestamp_millis`
+uses **milliseconds**. Time series default to bits/second; top reports default
+to bytes. Top totals are floating point because flows can be apportioned over
+aggregation buckets. The server may append an additional "other" row beyond
+the requested limit; `TopRow::is_other()` identifies it. `last_seen` preserves
+the server's text without guessing a timezone.
+
+Use metadata to select a retained resolution; a positive resolution is checked
+locally, but availability and retention are server-defined. Typed fields reject
+invalid groupings and filters for each dataset. Filters use literal tokens and
+are supported by top reports. Interface filters use device names from
+`interfaces()` (`igc0`, for example), rather than display labels such as `WAN`.
+CSV export and interface time series cover the whole dataset; top-report filters
+do not apply to them. All requests retain the client's timeout and body limits.
+
+Enable **Reporting → NetFlow → Capture local** and grant your API user access
+to Insight reporting. Empty results may mean no flows exist in the selected
+window. Summing across interfaces/directions can count the same traffic more
+than once; select the interface/direction appropriate for your report.
+
+The example loads your `.env`, discovers available datasets, and prints history
+counts, interface totals, top hosts/ports, and detailed flow groups:
+
+```sh
+cargo run --example insight -- --help
+cargo run --example insight -- all 1
+cargo run --example insight -- igc0 1
+cargo run --example insight -- igc0 1 insight.csv
+```
+
+Arguments are interface device (or `all`), lookback hours, and an optional CSV
+output path. The CSV contains all interface totals, even when the top reports
+are filtered to one interface.
+
+See the [Insight API reference](https://docs.opnsense.org/development/api/core/diagnostics.html)
+and [OPNsense's Insight UI](https://github.com/opnsense/core/blob/master/src/opnsense/mvc/app/views/OPNsense/Diagnostics/networkinsight.volt)
+for the underlying endpoints.
+
 ## Development
 
 Use stable Rust. Building AWS-LC requires a native C/C++ toolchain and CMake.

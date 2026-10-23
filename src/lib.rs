@@ -23,6 +23,7 @@ use reqwest::{Method, Url, header::ACCEPT, redirect::Policy};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 
+pub mod insight;
 mod stream;
 
 pub use reqwest::{Certificate, StatusCode};
@@ -50,6 +51,8 @@ pub enum Error {
     InvalidStreamContentType,
     #[error("invalid JSON response: {0}")]
     Decode(#[from] serde_json::Error),
+    #[error("response is not valid UTF-8: {0}")]
+    InvalidText(#[from] std::string::FromUtf8Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -77,6 +80,11 @@ impl fmt::Debug for Client {
 }
 
 impl Client {
+    /// Access typed historical NetFlow reports and CSV exports.
+    pub fn insight(&self) -> insight::Insight<'_> {
+        insight::Insight::new(self)
+    }
+
     /// Build with verified HTTPS, a 30-second timeout, and an 8 MiB body limit.
     pub fn new(base_url: &str, key: impl Into<String>, secret: impl Into<String>) -> Result<Self> {
         Self::builder(base_url, key, secret).build()
@@ -101,6 +109,14 @@ impl Client {
     /// GET a JSON response. Each endpoint element is encoded as one path segment.
     pub async fn get<T: DeserializeOwned>(&self, endpoint: &[&str]) -> Result<T> {
         self.execute(self.request(Method::GET, endpoint)?).await
+    }
+
+    /// Download a bounded binary or text response (for example an Insight CSV).
+    pub async fn get_bytes(&self, endpoint: &[&str]) -> Result<Vec<u8>> {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(ACCEPT, reqwest::header::HeaderValue::from_static("*/*"));
+        self.execute_bytes(self.request(Method::GET, endpoint)?.headers(headers))
+            .await
     }
 
     /// GET with URL-encoded query parameters, including OPNsense search options.
@@ -232,6 +248,10 @@ impl Client {
     }
 
     async fn execute<T: DeserializeOwned>(&self, request: reqwest::RequestBuilder) -> Result<T> {
+        Ok(serde_json::from_slice(&self.execute_bytes(request).await?)?)
+    }
+
+    async fn execute_bytes(&self, request: reqwest::RequestBuilder) -> Result<Vec<u8>> {
         tokio::time::timeout(self.timeout, async {
             let response = request.send().await?;
             let status = response.status();
@@ -242,7 +262,7 @@ impl Client {
                     body: String::from_utf8_lossy(&body).into_owned(),
                 });
             }
-            Ok(serde_json::from_slice(&body)?)
+            Ok(body)
         })
         .await
         .map_err(|_| Error::Timeout)?
