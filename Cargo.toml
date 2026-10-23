@@ -5,6 +5,7 @@ edition = "2024"
 description = "Asynchronous OPNsense API client for Tokio"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
+repository = "https://github.com/boondocklabs/opnsense-client"
 keywords = ["opnsense", "firewall", "tokio", "api", "sse"]
 categories = ["api-bindings", "network-programming", "asynchronous"]
 include = ["src/**", "examples/**", "tests/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE-*", ".env.example"]

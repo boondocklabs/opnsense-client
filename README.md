@@ -48,6 +48,12 @@ any owned Serde type, including `serde_json::Value`. Endpoint slices contain
 module, controller, command, then optional path arguments; every element is
 encoded independently. Use query parameters through `get_with_query`.
 
+Alternatively, depend directly on this Git repository:
+
+```toml
+opnsense-client = { git = "https://github.com/boondocklabs/opnsense-client", branch = "main" }
+```
+
 Create a key/secret pair for a user with the required API privileges under
 **System → Access → Users**. Authentication uses HTTP Basic with that pair,
 as described in the [OPNsense API guide](https://docs.opnsense.org/development/how-tos/api.html).
