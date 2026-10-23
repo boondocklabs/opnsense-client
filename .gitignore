@@ -1,0 +1,13 @@
+/target/
+.env
+.env.*
+!.env.example
+
+# Local certificates and private keys. The fixtures below are deliberately public.
+*.pem
+*.key
+*.p12
+*.pfx
+!/tests/fixtures/*.pem
+
+.DS_Store
